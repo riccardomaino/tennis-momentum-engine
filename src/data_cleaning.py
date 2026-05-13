@@ -4,10 +4,10 @@ import re
 import os
 
 #####---- Constants
-OUTPUT_DIR ="data"
-INPUT_CSV = os.path.join(OUTPUT_DIR, "raw_matches.csv")
-OUTPUT_CSV = os.path.join(OUTPUT_DIR, "cleaned_matches.csv")
-INVALID_SCORE_TOKENS = {"W/O", "RET", "DEF", "ABD", "UNF", "NAN", ""}
+DATA_DIR ="data"
+INPUT_CSV = os.path.join(DATA_DIR, "raw_matches.csv")
+OUTPUT_CSV = os.path.join(DATA_DIR, "cleaned_matches.csv")
+INVALID_SCORE_TOKENS = r"W/O|RET|DEF|ABD|UNF|NAN"
 NUMERIC_COLS = ["w_ace", "w_df", "w_svpt", "w_1stIn", "w_1stWon", "w_2ndWon", "w_bpSaved", "w_bpFaced", "w_SvGms",
             "l_ace", "l_df", "l_svpt", "l_1stIn", "l_1stWon", "l_2ndWon", "l_bpSaved", "l_bpFaced", "l_SvGms",
             "winner_rank", "winner_rank_points", "loser_rank_points", "loser_rank",
@@ -40,7 +40,12 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
   return df
 
 if __name__ == "__main__":
+  if not os.path.exists(INPUT_CSV):
+    raise FileNotFoundError("Run data_retrieval.py first.")
+  
   df = pd.read_csv(INPUT_CSV)
+  print(f"Loaded {len(df):,} raw matches.")
+  
   df_cleaned = clean_data(df)
   df_cleaned.to_csv(OUTPUT_CSV, index=False)
   print(f"\nSaved {len(df_cleaned):,} matches → {OUTPUT_CSV}")
