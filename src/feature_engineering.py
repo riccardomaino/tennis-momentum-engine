@@ -9,21 +9,20 @@ import pandas as pd
 warnings.filterwarnings("ignore")
 
 
-#####---- Constants
+#### ----------------- Constants -----------------
 DATA_DIR = "data"
 INPUT_CSV = os.path.join(DATA_DIR,"cleaned_matches.csv")
 OUTPUT_MATCHES_CSV = os.path.join(DATA_DIR,"matches_data.csv")
 OUTPUT_PLAYERS_CSV = os.path.join(DATA_DIR,"players_data.csv")
-
-SERVE_COLS = ["ace", "df", "svpt", "1stIn", "1stWon", "2ndWon", "bpSaved", "bpFaced"] # prefix: "w_"=winner, "l_"=loser
+SERVE_COLS = ["ace", "df", "svpt", "1stIn", "1stWon", "2ndWon", "bpSaved", "bpFaced"]
 INVALID_SCORE_TOKENS = {"W/O", "RET", "DEF", "ABD", "UNF", "NAN", ""}
 
 
-#####---- Helper
+
+
+#### ------------------ Helper ------------------
 def _div(numerator: float, denominator: float, fill: float = np.nan) -> float:
-  """
-  Divide two numbers and return `fill` instead of raising ZeroDivisionError
-  or producing an inf/nan
+  """Divide two numbers and return `fill` instead of raising ZeroDivisionError producing an inf/nan
 
   Args:
     numerator (float): Number at the numerator of the division
@@ -40,26 +39,25 @@ def _div(numerator: float, denominator: float, fill: float = np.nan) -> float:
     return numerator/denominator
 
 def g(prefix: str, col: str) -> str:
-  """
-  Define the full name of a DataFrame column
+  """Define the full name of a DataFrame column.
+  
   Args:
-      prefix (str): Prefix of a certain DataFrame column
-      col (str): Specific name of the DataFrame  column 
+    prefix (str): Prefix of a certain DataFrame column
+    col (str): Specific name of the DataFrame  column 
 
   Returns:
-      str: A string consisting in the full name of the DataFrame column
+    str: A string consisting in the full name of the DataFrame column
   """
   return prefix+col
 
 def extract_winner_lost_s1(scores: pd.Series) -> pd.Series:
-  """
-  Vectorized function that returns a series with 1s if the winner lost the first set, 0 otherwise
+  """Vectorized function that returns a series with 1s if the winner lost the first set, 0 otherwise.
 
   Args:
     scores (pd.Series): A series of score
     
   Returns:
-      pd.Series: A series of 1s and 0s based on if the winner lost the first set
+    pd.Series: A series of 1s and 0s based on if the winner lost the first set
   """
   first_set = scores.str.split(n=1, expand=True)[0]
   pattern = r"^(\d+)(?:\([0-9]+\))?-(\d+)(?:\([0-9]+\))?"
@@ -70,10 +68,12 @@ def extract_winner_lost_s1(scores: pd.Series) -> pd.Series:
   winner_lost_s1 = winner_lost_s1.fillna(False)
   return winner_lost_s1.astype(int)
 
-####---- Core Feature Engineering
+
+
+
+#### ----------- Features Engineering -----------
 def build_match_features(df: pd.DataFrame) -> pd.DataFrame:
-  """
-  Build new matches features as columns of the provided DataFrame using Pandas vectorization capabilities.
+  """Build new matches features as columns of the provided DataFrame using Pandas vectorization capabilities.
 
   For each match we compute:
     - Serve rates for winner and loser (ace %, df %, 1st serve %, etc.)
@@ -83,7 +83,7 @@ def build_match_features(df: pd.DataFrame) -> pd.DataFrame:
     - Two binary labels: came_back and upset
 
   Args
-    df (pd.DataFrame): The input DataFrame
+    df (pd.DataFrame): The input DataFrame containing matches data
 
   Returns:
     pd.DataFrame: The output DataFrame with the new features
@@ -119,7 +119,7 @@ def build_match_features(df: pd.DataFrame) -> pd.DataFrame:
   df["w_retWon_pct"] = 1 - df["l_srvWon_pct"] 
   df["l_retWon_pct"] = 1 - df["w_srvWon_pct"]
   # Ranking Gap
-  df["rank_gap"] = df["winner_rank"] - df["loser_rank"]
+  df["rank_gap"] = df["loser_rank"] - df["winner_rank"]
   # Deltas
   df["delta_ace_pct"] = df["w_ace_rate"] - df["l_ace_rate"]
   df["delta_1stWon_pct"] = df["w_1stWon_pct"] - df["l_1stWon_pct"]
@@ -142,15 +142,24 @@ def build_match_features(df: pd.DataFrame) -> pd.DataFrame:
   
   df = df.replace([np.inf, -np.inf], np.nan)
   df = df.dropna(subset=["w_ace_rate", "l_ace_rate", "came_back"])
-  df = df.drop(columns=["surface", "draw_size", "tourney_level", "match_num", "best_of", "round",
-                        "winner_seed", "winner_entry", "winner_ioc", "winner_rank_points",
-                        "loser_seed", "loser_entry", "loser_ioc", "loser_rank_points"])
+  # df = df.drop(columns=["surface", "draw_size", "tourney_level", "match_num", "best_of", "round",
+  #                       "winner_seed", "winner_entry", "winner_ioc", "winner_rank_points",
+  #                       "loser_seed", "loser_entry", "loser_ioc", "loser_rank_points"])
   print(f"[matches_data] {len(df):,} rows  |  "
         f"comeback rate: {df["came_back"].mean():.2%} "
         f"upset rate: {df["upset"].mean():.2%}")
   return df
 
-def build_player_profiles(df: pd.DataFrame, min_matches: int = 30) -> pd.DataFrame:
+def build_player_profiles(df: pd.DataFrame, min_matches: int = 100) -> pd.DataFrame:
+  """Builds a new DataFrame containing per-player career features
+
+  Args:
+    df (pd.DataFrame): The input DataFrame containing matches data
+    min_matches (int, optional): Minimum number of matches to consider a player. Defaults to 30.
+    
+  Returns:
+    pd.DataFrame: The output DataFrame with the per-player career features 
+  """
   winner_lost_s1 = extract_winner_lost_s1(df["score"])
   
   roles = [
@@ -182,7 +191,8 @@ def build_player_profiles(df: pd.DataFrame, min_matches: int = 30) -> pd.DataFra
       "o_bpSaved": pd.to_numeric(df[f"{opfx}bpSaved"], errors="coerce")
     })
     # Comeback opportunity & success
-    player_df["cb_opp"] = (((won == 1) & winner_lost_s1) | (won == 0)).astype(int)
+    player_df["cb_opp"] = (((won == 1) & winner_lost_s1) | 
+                           ((won == 0) & ~winner_lost_s1)).astype(int)
     player_df["cb_success"] = ((won == 1) & winner_lost_s1).astype(int)
     results.append(player_df)
   
@@ -192,7 +202,7 @@ def build_player_profiles(df: pd.DataFrame, min_matches: int = 30) -> pd.DataFra
   if players_stats_df.empty:
     return pd.DataFrame()
   
-  grp = player_df.groupby("player")
+  grp = players_stats_df.groupby("player")
 
   # Aggregate raw counts
   agg = grp.agg(
@@ -217,9 +227,16 @@ def build_player_profiles(df: pd.DataFrame, min_matches: int = 30) -> pd.DataFra
     best_rank = ("rank", "min")
   ).reset_index()
 
+  # Filter minimum matches
+  agg = agg[agg["matches_played"] >= min_matches].copy().reset_index(drop=True)
+  
   # Compute rates from aggregated counts
   agg["win_rate"] = agg["wins"] / agg["matches_played"]
-  agg["comeback_rate"] = np.where(agg["cb_opportunities"] >= 10, agg["cb_successes"] / agg["cb_opportunities"], np.nan)
+  agg["comeback_rate"] = np.where(
+    agg["cb_opportunities"] >= 10, 
+    agg["cb_successes"] / agg["cb_opportunities"],
+    np.nan
+  )
   agg["ace_rate"] = agg["sum_ace"] / agg["sum_svpt"]
   agg["df_rate"] = agg["sum_df"] / agg["sum_svpt"]
   agg["first_serve_in"] = agg["sum_1stIn"] / agg["sum_svpt"]
@@ -248,13 +265,12 @@ def build_player_profiles(df: pd.DataFrame, min_matches: int = 30) -> pd.DataFra
   drop_cols = [c for c in agg.columns if c.startswith(("sum_", "_"))]
   agg.drop(columns=drop_cols, inplace=True)
 
-  # Filter minimum matches
-  agg = agg[agg["matches_played"] >= min_matches].copy().reset_index(drop=True)
-
-  print(f"[players_data] {len(df):,} rows  |  (≥{min_matches} matches)")
+  print(f"[players_data] {len(agg):,} rows  |  (≥{min_matches} matches)")
   return agg
   
-  
+
+
+#### ------------------- Main -------------------
 if __name__ == "__main__":
   if not os.path.exists(INPUT_CSV):
     raise FileNotFoundError("Run data_cleaning.py first.")
