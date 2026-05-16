@@ -18,8 +18,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
-import shap
-
 import joblib
 
 warnings.filterwarnings("ignore")
@@ -138,7 +136,7 @@ def _build_models(pos_weight: float) -> dict:
       ("clf", RandomForestClassifier(
         n_estimators=400, # number of trees
         max_depth=8, # maximum depth of a tree
-        min_sample_leaf=20, # min samples for a leaf
+        min_samples_leaf=20, # min samples for a leaf
         class_weight="balanced_subsample", # auto-adjusts class weights from boostrap sample
         n_jobs=-1,
         random_state=42
@@ -160,45 +158,6 @@ def _build_models(pos_weight: float) -> dict:
       ))
     ]),
   }
-  
-def _shap_summary(model, X_train: np.ndarray, feature_names: list, tag: str) -> None:
-  """
-  Compute SHAP values for a random sample and save a beeswarm summary plot.
-
-  TreeExplainer works with any tree ensemble (RF, XGBoost, GBM).
-  For Logistic Regression it falls back to LinearExplainer.
-  SHAP values tell us: for each feature, how much did it push this
-  prediction above or below the base rate?
-  """
-  clf = model.named_steps["clf"]
-
-  # Sample to keep computation under a few seconds
-  rng   = np.random.default_rng(42)
-  idx   = rng.choice(len(X_train), size=min(2000, len(X_train)), replace=False)
-  X_smp = X_train[idx]
-
-  try:
-    explainer   = shap.TreeExplainer(clf)
-    shap_values = explainer.shap_values(X_smp)
-
-    # For binary classifiers, RF returns a list [class0, class1]
-    if isinstance(shap_values, list):
-      shap_values = shap_values[1]
-
-    fig, ax = plt.subplots(figsize=(10, 7))
-    shap.summary_plot(
-      shap_values, X_smp,
-      feature_names=feature_names,
-      show=False, plot_type="dot",
-    )
-    plt.title(f"SHAP Feature Importance — {tag.replace('_',' ').title()}", color=TEXT, fontsize=11)
-    plt.tight_layout()
-    path = f"plots/{tag}_shap.png"
-    plt.savefig(path, dpi=150, bbox_inches="tight", facecolor=DARK, edgecolor="none")
-    plt.close()
-    print(f"  ✓  plots/{tag}_shap.png")
-  except Exception as exc:
-    print(f"  ⚠  SHAP skipped: {exc}")
 
 def train_task(
   df: pd.DataFrame,
