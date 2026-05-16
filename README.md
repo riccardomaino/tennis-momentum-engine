@@ -1,42 +1,220 @@
-Label, Description,Feature Engineering Idea
-- **tourney_id**
-  - *Event Prestige*: Group by ID to see if a player performs better at specific recurring tournaments.
-- **surface**
-  - *Surface Specialist*: Encode this! A player might have a 40% win rate on Hard but 80% on Clay.
-- **tourney_level**
-  - *Big Stage Factor*: Calculate a "Pressure Rating." Some players crumble in 5-set Slams but dominate 3-set ATP 250s.
-- **tourney_date**
-  - *Seasonality*: Convert to month. Does the player peak during the "European Clay Swing"?
-- **draw_size**: Number of players in the event.
-  - *Fatigue Proxy*: Larger draws mean more matches played to reach the final.
+# 🎾 Tennis Momentum Engine
 
-- **hand**
-  - *Lefty Advantage*: Create a boolean is_lefty_match. Lefties often have a serve advantage that bothers righties.
-- **winner_ht / loser_ht**
-  - *Serve Potential*: Calculate height_diff. Taller players generally have higher ace counts but might move slower.
-- **winner_ioc / loser_ioc**
-  - *Home Court*: Does the player win more when ioc matches the tournament’s location?
-- **winner_age / loser_age**
-  - *Experience Gap*: winner_age - loser_age. Is the "old guard" beating the "next gen"?
-- **winner_rank (winner_rank_points) vs. loser_rank (loser_rank_points)**
-  - *Upset Metric*: Calculate the log-difference in rank points. This is a massive predictor for win probability.
+> **A data-driven profiling and prediction system for ATP Tour resilience, clutch performance, and upset dynamics — built on 20+ years of match data.**
 
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python)
+![scikit-learn](https://img.shields.io/badge/scikit--learn-1.4%2B-orange?style=flat-square)
+![XGBoost](https://img.shields.io/badge/XGBoost-2.0%2B-green?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-lightgrey?style=flat-square)
 
-- **ace / df**
-  - *Serve Quality*:​ the control ratio ace/df
-- **svpt**: Use this as the denominator for most serve stats.
-- *1st Serve %* 1stIN/svpt. Crucial for consistent pressure.
-- *Power Factor*: 1stWon​/1stIn. High % here means a heavy, unreturnable serve.
-- *Vulnerability*: 2ndWon​/svpt−1stIn. If this is low, the player is easy to break.
-- *Hold Rate*: Points won per service game.
-- *Clutch Factor*: bpSaved/bpFaced High % shows mental toughness under pressure.
+---
 
+## Table of Contents
 
+- [🎾 Tennis Momentum Engine](#-tennis-momentum-engine)
+  - [Table of Contents](#table-of-contents)
+  - [Project Overview](#project-overview)
+  - [Key Features](#key-features)
+  - [Installation](#installation)
+    - [Prerequisites](#prerequisites)
+    - [Install uv](#install-uv)
+    - [Clone and install](#clone-and-install)
+    - [Dependencies](#dependencies)
+  - [Running the Pipeline](#running-the-pipeline)
+  - [Feature Dictionary](#feature-dictionary)
+    - [Match Features (`matches_data.csv`)](#match-features-matches_datacsv)
+      - [Identifiers](#identifiers)
+      - [Labels](#labels)
+      - [Winner serve features (`w_*`)](#winner-serve-features-w_)
+      - [Loser serve features (`l_*`)](#loser-serve-features-l_)
+      - [Delta features](#delta-features)
+      - [Context dummies](#context-dummies)
+    - [Player Profiles (`players_data.csv`)](#player-profiles-players_datacsv)
+  - [Limitations](#limitations)
+  - [Data Source](#data-source)
+  - [📄 License](#-license)
 
+---
+## Project Overview
 
+The **Tennis Momentum Engine** answers three related questions using 30+ years of ATP Tour data:
 
+| Question | Task | Output |
+|---|---|---|
+| What makes a player a "comeback player"? | Binary classification | Comeback probability |
+| Can we predict upsets before they happen? | Binary classification | Upset probability + feature ranking |
+| Which players perform best under pressure? | Aggregation + clustering | Clutch Index leaderboard + player radar |
 
-# Tennis ATP Match Dataset - Column Descriptions
+The project was built as a full end-to-end data science / machine learning pipeline — from raw CSV ingestion through to fully trained models.
+
+---
+
+## Key Features
+- **Two ML classifiers** (Comeback + Upset) with cross-validated model selection and ROC/Confusion Matrix evaluation
+- **Player profile engine** computing Clutch Index (z-scored break-point performance), Comeback Rate, and Serve Style Score for every ATP player with >= 100 matches
+- **Interactive Streamlit app** with 5 tabs: EDA overview, comeback predictor, upset predictor, player lookup (with radar chart), and sortable leaderboards
+- **Six EDA Plots** useful insight about the data
+
+---
+
+## Installation
+
+### Prerequisites
+
+- Python 3.10+
+- uv
+
+### Install uv
+
+If you don't already have `uv` installed:
+
+```bash
+# macOS / Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows (PowerShell)
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+### Clone and install
+
+```bash
+git clone https://github.com/YOUR_USERNAME/tennis_momentum_engine.git
+cd tennis_momentum_engine
+
+uv venv
+source .venv/bin/activate # Windows: .venv\Scripts\activate
+
+uv sync
+```
+
+### Dependencies
+
+Dependencies are managed through `pyproject.toml`.
+
+Example:
+
+```toml
+[project]
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "scikit-learn>=1.4",
+    "xgboost>=2.0",
+    "shap>=0.44",
+    "streamlit>=1.32",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+    "plotly>=5.18",
+    "requests>=2.31",
+    "tqdm>=4.66",
+    "joblib>=1.3"
+]
+```
+
+---
+
+## Running the Pipeline
+
+Run each step in order. Each script is standalone and can be re-run independently.
+
+```bash
+# Step 1 — Download ATP matches
+uv run src.data_retrieval.py
+
+# Step 2 — Build feature tables
+uv run src/feature_engineering.py
+
+# Step 3 — Generate EDA plots
+uv run src/eda.py
+
+# Step 4 — Train and evaluate models
+uv run src/train.py
+```
+
+---
+
+## Feature Dictionary
+
+### Match Features (`matches_data.csv`)
+
+#### Identifiers
+| Column | Description |
+|---|---|
+| `winner_name` / `loser_name` | Player names |
+| `surface` | Clay / Hard / Grass / Carpet |
+| `tourney_level` | G=Grand Slam, M=Masters, A=250/500 |
+| `round` | R128, R64, QF, SF, F … |
+| `year` | Calendar year |
+
+#### Labels
+| Column | Description |
+|---|---|
+| `came_back` | 1 if the winner lost Set 1 (comeback win), 0 otherwise |
+| `upset` | 1 if the lower-ranked player won, 0 otherwise |
+
+#### Winner serve features (`w_*`)
+| Column | Formula |
+|---|---|
+| `w_ace_rate` | aces / serve points |
+| `w_df_rate` | double faults / serve points |
+| `w_1stIn_pct` | 1st serves in / serve points |
+| `w_1stWon_pct` | 1st serve points won / 1st serves in |
+| `w_2ndWon_pct` | 2nd serve points won / 2nd serve points |
+| `w_bpSaved_pct` | break points saved / break points faced |
+| `w_srvWon_pct` | (1st won + 2nd won) / serve points |
+| `w_retWon_pct` | 1 − opponent serve points won rate |
+
+#### Loser serve features (`l_*`)
+Same schema as winner features with `l_` prefix.
+
+#### Delta features
+| Column | Description |
+|---|---|
+| `delta_ace_pct` | `w_ace_rate − l_ace_rate` |
+| `delta_1stWon_pct` | `w_1stWon_pct − l_1stWon_pct` |
+| `delta_bpSaved_pct` | `w_bpSaved_pct − l_bpSaved_pct` |
+| `delta_srvWon_pct` | `w_srvWon_pct − l_srvWon_pct` |
+| `delta_retWon_pct` | `w_retWon_pct − l_retWon_pct` |
+| `rank_gap` | `loser_rank − winner_rank` (positive = winner ranked higher) |
+
+#### Context dummies
+| Column | Value |
+|---|---|
+| `surf_hard` / `surf_clay` / `surf_grass` / `surf_carpet` | 1 if surface matches, 0 otherwise (Other = all zeros) |
+| `is_gs` | 1 if Grand Slam |
+| `is_masters` | 1 if Masters 1000 |
+| `is_atp` | 1 if ATP 250/500 |
+| `is_finals` | 1 if ATP Finals |
+| `is_davis` | 1 if Davis Cup |
+| `best_of_5` | 1 if best-of-5 format |
+
+### Player Profiles (`players_data.csv`)
+
+| Column | Description |
+|---|---|
+| `player` | Player name |
+| `matches_played` | Total career matches in dataset |
+| `win_rate` | Career win rate |
+| `cb_opportunities` | Matches where player either lost Set 1 (as winner) or lost the match |
+| `cb_successes` | Matches where player won after losing Set 1 |
+| `comeback_rate` | `cb_successes / cb_opportunities` (NaN if < 10 opportunities) |
+| `clutch_index` | z-score average of `bp_save_rate` and `bp_conv_rate` |
+| `serve_style_score` | Normalised 0–1 composite of `ace_rate` + `first_serve_in` |
+| `bp_conv_rate` | Break points converted / break points created |
+| `avg_rank` / `best_rank` | Career average and best ATP ranking |
+
+---
+
+## Limitations
+1. **No set-level stats** — all features are match aggregates. The model profiles comeback *types of players*, not comeback *situations*.
+2. **Era effects** — serving styles and ranking systems changed significantly between 1991 and 2023.
+
+---
+
+## Data Source
+
+All match data comes from **Jeff Sackmann's open-source ATP dataset**:
 
 | Column | Description |
 |---|---|
@@ -90,3 +268,27 @@ Label, Description,Feature Engineering Idea
 | `loser_rank` | ATP ranking of the loser at match time. |
 | `loser_rank_points` | ATP ranking points of the loser. |
 | `year` | Year of the tournament/match. |
+
+> Sackmann, J. (2024). *tennis_atp*. GitHub repository.
+> https://github.com/JeffSackmann/tennis_atp
+
+The dataset is provided under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+
+> Please respect the license terms: attribution is required, commercial use is not permitted.
+
+---
+
+## 📄 License
+
+This project is released under the **MIT License**. See `LICENSE` for details.
+
+The underlying data (Jeff Sackmann's ATP dataset) is subject to its own CC BY-NC-SA 4.0 license.
+
+---
+
+
+
+
+
+
+
