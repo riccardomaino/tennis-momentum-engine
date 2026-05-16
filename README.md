@@ -1,6 +1,6 @@
 # 🎾 Tennis Momentum Engine
 
-> **A data-driven profiling and prediction system for ATP Tour resilience, clutch performance, and upset dynamics — built on 20+ years of match data.**
+> **A data-driven profiling and prediction system for ATP Tour comeback, clutch performance, and upset dynamics — built on 20+ years of match data.**
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python)
 ![scikit-learn](https://img.shields.io/badge/scikit--learn-1.4%2B-orange?style=flat-square)
